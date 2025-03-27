@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ويب شات</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: #f0f4f8;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        color: #333;
+      }
+      .chat-app {
+        display: flex;
+        height: 100vh;
+        max-width: 1400px;
+        margin: 20px auto;
+        background: #fff;
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+      .sidebar {
+        width: 350px;
+        background: #fdfdfd;
+        border-right: 1px solid #e8ecef;
+        overflow-y: auto;
+        transition: transform 0.3s ease;
+      }
+      .header {
+        padding: 25px;
+        background: linear-gradient(135deg, #2a9d8f, #264653);
+        color: #fff;
+        text-align: center;
+        font-size: 1.6em;
+        font-weight: 700;
+        letter-spacing: 1.2px;
+        position: relative;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+      .header::after {
+        content: "";
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 50px;
+        height: 3px;
+        background: #fff;
+        border-radius: 2px;
+      }
+      .search-box {
+        padding: 20px;
+        position: relative;
+      }
+      #search-input {
+        width: 100%;
+        padding: 14px 20px;
+        border: none;
+        border-radius: 30px;
+        background: #f5f7fa;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        outline: none;
+        font-size: 14px;
+        transition: all 0.3s ease;
+      }
+      #search-input:focus {
+        box-shadow: 0 4px 15px rgba(42, 157, 143, 0.2);
+        background: #fff;
+      }
+      .search-results {
+        position: absolute;
+        top: 70px;
+        right: 20px;
+        width: calc(100% - 40px);
+        max-height: 250px;
+        overflow-y: auto;
+        background: #fff;
+        border-radius: 15px;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        z-index: 10;
+        animation: fadeIn 0.3s ease;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .search-result {
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background 0.2s ease;
+      }
+      .search-result:last-child {
+        border-bottom: none;
+      }
+      .search-result:hover {
+        background: #e6f0fa;
+      }
+      .search-result span {
+        font-size: 15px;
+        font-weight: 500;
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .search-result button {
+        padding: 8px 16px;
+        background: linear-gradient(135deg, #2a9d8f, #36c7b5);
+        color: #fff;
+        border: none;
+        border-radius: 25px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+      }
+      .search-result button:hover {
+        background: linear-gradient(135deg, #264653, #2a9d8f);
+        transform: translateY(-2px);
+      }
+      .search-result button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+      }
+      h3 {
+        padding: 15px 20px;
+        color: #666;
+        font-size: 14px;
+        font-weight: 700;
+        margin: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .user-list,
+      .pending-requests {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      .user {
+        padding: 15px 20px;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+        border-bottom: 1px solid #f5f5f5;
+      }
+      .user:hover {
+        background: #e6f0fa;
+        transform: translateX(5px);
+      }
+      .user img {
+        border-radius: 50%;
+        margin-left: 15px;
+        width: 45px;
+        height: 45px;
+        object-fit: cover;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .user.online::after {
+        content: "";
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        background: #2ecc71;
+        border-radius: 50%;
+        bottom: 20px;
+        left: 50px;
+        border: 2px solid #fff;
+      }
+      .user-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .username {
+        font-weight: 600;
+        font-size: 16px;
+        color: #2c3e50;
+        max-width: 220px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .status {
+        font-size: 12px;
+        color: #95a5a6;
+      }
+      .status.online {
+        color: #2ecc71;
+      }
+      .request-container {
+        position: relative;
+        margin: 10px 20px;
+        transition: all 0.3s ease;
+      }
+      .request {
+        padding: 15px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: linear-gradient(135deg, #ffffff, #f9fbfc);
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+        animation: slideInRequest 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+      @keyframes slideInRequest {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .request:hover {
+        transform: scale(1.02);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+      }
+      .request.accepted::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(46, 204, 113, 0.2);
+        z-index: 1;
+        animation: fadeOutOverlay 0.5s ease forwards;
+      }
+      .request.declined::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(231, 76, 60, 0.2);
+        z-index: 1;
+        animation: fadeOutOverlay 0.5s ease forwards;
+      }
+      @keyframes fadeOutOverlay {
+        from {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+        }
+      }
+      .request img {
+        margin-left: 15px;
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #2a9d8f;
+      }
+      .request .username {
+        max-width: 160px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #2c3e50;
+      }
+      .request-buttons {
+        display: flex;
+        gap: 12px;
+        position: relative;
+        z-index: 2;
+      }
+      .request-buttons .accept {
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #2ecc71, #27ae60);
+        color: #fff;
+        border: none;
+        border-radius: 25px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+      .request-buttons .accept:hover {
+        background: linear-gradient(135deg, #27ae60, #219653);
+        transform: translateY(-2px);
+      }
+      .request-buttons .accept::after {
+        content: "✔";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0);
+        font-size: 18px;
+        color: #fff;
+        transition: transform 0.3s ease;
+      }
+      .request-buttons .accept.clicked::after {
+        transform: translate(-50%, -50%) scale(1);
+      }
+      .decline-btn {
+        position: absolute;
+        top: 50%;
+        left: -30px;
+        transform: translateY(-50%);
+        width: 30px;
+        height: 30px;
+        background: linear-gradient(135deg, #e74c3c, #c0392b);
+        color: #fff;
+        border: none;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        cursor: pointer;
+        opacity: 0;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 10px rgba(231, 76, 60, 0.3);
+      }
+      .request-container:hover .decline-btn {
+        opacity: 1;
+        left: -40px;
+      }
+      .decline-btn:hover {
+        background: linear-gradient(135deg, #c0392b, #a93226);
+        transform: translateY(-50%) scale(1.1);
+      }
+      .decline-btn::after {
+        content: "✖";
+      }
+      .request-status {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 14px;
+        font-weight: 600;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 8px 16px;
+        border-radius: 20px;
+        opacity: 0;
+        z-index: 2;
+        transition: opacity 0.3s ease;
+      }
+      .request.accepted .request-status,
+      .request.declined .request-status {
+        opacity: 1;
+      }
+      .chat-window {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: #f9fbfc;
+      }
+      .chat-header {
+        padding: 20px 25px;
+        background: linear-gradient(135deg, #2a9d8f, #264653);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+      .chat-header .back-btn {
+        display: none;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 5px;
+        transition: transform 0.2s ease;
+      }
+      .chat-header .back-btn:hover {
+        transform: scale(1.2);
+      }
+      .chat-header img {
+        border-radius: 50%;
+        margin-left: 15px;
+        width: 50px;
+        height: 50px;
+        object-fit: cover;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+      }
+      .chat-header .username {
+        font-size: 20px;
+        font-weight: 700;
+        max-width: 70%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .chat-header .status {
+        font-size: 13px;
+        opacity: 0.9;
+        font-weight: 500;
+      }
+      .chat-messages {
+        flex: 1;
+        padding: 30px;
+        overflow-y: auto;
+        background: linear-gradient(to bottom, #f9fbfc, #eef2f7);
+      }
+      .message {
+        display: flex;
+        align-items: flex-end;
+        margin-bottom: 25px;
+        position: relative;
+        animation: slideInMessage 0.4s ease;
+      }
+      @keyframes slideInMessage {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .message.sent {
+        justify-content: flex-end;
+      }
+      .message.received {
+        justify-content: flex-start;
+      }
+      .message img {
+        border-radius: 50%;
+        margin-left: 12px;
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+      }
+      .message-content {
+        max-width: 70%;
+        padding: 16px 22px;
+        border-radius: 25px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+        position: relative;
+        background: #fff;
+      }
+      .message.sent .message-content {
+        background: linear-gradient(135deg, #2a9d8f, #36c7b5);
+        color: #fff;
+      }
+      .message.received .message-content {
+        background: #fff;
+        color: #333;
+        border: 1px solid #e8ecef;
+      }
+      .message:hover .message-content {
+        transform: scale(1.03);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+      }
+      .message.reply .message-content {
+        border-right: 5px solid #2ecc71;
+        padding-right: 18px;
+      }
+      .message.reply::before {
+        content: "رد على: ";
+        color: #7f8c8d;
+        font-size: 12px;
+        position: absolute;
+        top: -20px;
+        right: 15px;
+        font-weight: 500;
+      }
+      .reply-preview {
+        font-size: 13px;
+        color: #95a5a6;
+        margin-bottom: 10px;
+        opacity: 0.9;
+        font-style: italic;
+        background: rgba(0, 0, 0, 0.03);
+        padding: 5px 10px;
+        border-radius: 10px;
+      }
+      .message.deleted .text {
+        color: #bdc3c7;
+        font-style: italic;
+      }
+      .time {
+        font-size: 12px;
+        opacity: 0.8;
+        margin-top: 8px;
+        display: block;
+      }
+      .message-status {
+        font-size: 11px;
+        margin-right: 5px;
+      }
+      .chat-input {
+        padding: 25px;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        border-top: 1px solid #e8ecef;
+        box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.05);
+      }
+      .chat-input input {
+        flex: 1;
+        padding: 16px 25px;
+        border: none;
+        border-radius: 35px;
+        background: #f5f7fa;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        outline: none;
+        font-size: 14px;
+        transition: all 0.3s ease;
+      }
+      .chat-input input:focus {
+        background: #fff;
+        box-shadow: 0 4px 15px rgba(42, 157, 143, 0.2);
+      }
+      .chat-input .icon-btn {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 8px;
+        color: #7f8c8d;
+        transition: all 0.3s ease;
+      }
+      .chat-input .icon-btn:hover {
+        color: #2a9d8f;
+        transform: scale(1.1);
+      }
+      .chat-input button {
+        padding: 16px;
+        background: linear-gradient(135deg, #2a9d8f, #36c7b5);
+        color: #fff;
+        border: none;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+      .chat-input button:hover {
+        transform: scale(1.1);
+        background: linear-gradient(135deg, #264653, #2a9d8f);
+        box-shadow: 0 4px 15px rgba(42, 157, 143, 0.3);
+      }
+      .action-menu {
+        position: absolute;
+        background: #fff;
+        border-radius: 12px;
+        padding: 10px;
+        z-index: 100;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        animation: fadeIn 0.2s ease;
+      }
+      .action-menu button {
+        display: block;
+        width: 100%;
+        padding: 10px 15px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        text-align: right;
+        font-size: 14px;
+        color: #2c3e50;
+        transition: all 0.2s ease;
+      }
+      .action-menu button:hover {
+        background: #e6f0fa;
+        color: #2a9d8f;
+      }
+      .notification {
+        position: fixed;
+        top: 30px;
+        right: 30px;
+        background: linear-gradient(135deg, #2ecc71, #27ae60);
+        color: #fff;
+        padding: 15px 25px;
+        border-radius: 12px;
+        display: none;
+        z-index: 1000;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        max-width: 350px;
+        animation: slideIn 0.5s ease;
+      }
+      .notification strong {
+        font-size: 16px;
+        display: block;
+        margin-bottom: 5px;
+      }
+      .notification p {
+        margin: 0;
+        font-size: 14px;
+      }
+      .typing-indicator {
+        font-size: 13px;
+        color: #7f8c8d;
+        padding: 15px 30px;
+        display: none;
+        font-style: italic;
+        background: rgba(0, 0, 0, 0.02);
+        border-radius: 10px;
+        margin: 0 30px 10px;
+      }
+      @media (max-width: 768px) {
+        .chat-app {
+          margin: 0;
+          border-radius: 0;
+        }
+        .sidebar {
+          width: 100%;
+          position: absolute;
+          z-index: 100;
+          transform: translateX(-100%);
+        }
+        .sidebar.active {
+          transform: translateX(0);
+        }
+        .chat-header .back-btn {
+          display: block;
+        }
+        .chat-messages {
+          padding: 20px;
+        }
+        .chat-input {
+          padding: 15px;
+        }
+        .decline-btn {
+          left: -20px;
+          width: 25px;
+          height: 25px;
+          font-size: 14px;
+        }
+        .request-container:hover .decline-btn {
+          left: -30px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chat-app">
+      <div class="sidebar">
+        <div class="header"><h2>الدردشة</h2></div>
+        <div class="search-box">
+          <input
+            type="text"
+            id="search-input"
+            placeholder="ابحث عن صديق جديد..."
+          />
+          <div id="search-results" class="search-results"></div>
+        </div>
+        <h3>طلبات الاتصال</h3>
+        <ul class="pending-requests"></ul>
+        <h3>الأصدقاء</h3>
+        <ul class="user-list"></ul>
+      </div>
+      <div class="chat-window">
+        <div class="chat-header">
+          <span class="back-btn" onclick="toggleSidebar()">←</span>
+          <div class="user-info">
+            <img src="https://via.placeholder.com/50" alt="صورة المستخدم" />
+            <span class="username"></span>
+            <span class="status"></span>
+          </div>
+        </div>
+        <div class="chat-messages"></div>
+        <div class="typing-indicator" id="typing-indicator">
+          جاري الكتابة...
+        </div>
+        <div class="chat-input">
+          <button class="icon-btn">😊</button>
+          <input type="text" placeholder="اكتب رسالتك هنا..." />
+          <button class="icon-btn">📎</button>
+          <button onclick="sendMessage()">➤</button>
+        </div>
+      </div>
+    </div>
+    <div id="action-menu" class="action-menu">
+      <button onclick="deleteSelectedMessage()">حذف</button>
+      <button onclick="replyToMessage()">رد</button>
+      <button onclick="copyMessage()">نسخ</button>
+    </div>
+    <div id="notification" class="notification"></div>
+
+    <script>
+      const socket = io("http://localhost:4000", { transports: ["websocket"] });
+      const chatMessages = document.querySelector(".chat-messages");
+      const messageInput = document.querySelector(".chat-input input");
+      const sendButton = document.querySelector(".chat-input button");
+      const userList = document.querySelector(".user-list");
+      const pendingRequests = document.querySelector(".pending-requests");
+      const searchInput = document.querySelector("#search-input");
+      const searchResults = document.querySelector("#search-results");
+      const actionMenu = document.getElementById("action-menu");
+      const notification = document.getElementById("notification");
+      const typingIndicator = document.getElementById("typing-indicator");
+
+      let email = sessionStorage.getItem("email") || "";
+      let name = sessionStorage.getItem("name") || "";
+      let chatPartner = "";
+      let selectedMessageId = null;
+      let replyToMessageId = null;
+      let typingTimeout;
+      let pendingRequestSent = new Set();
+
+      socket.on("connect", () => console.log("✅ Connected to server"));
+      socket.on("connect_error", (err) =>
+        console.error("❌ Connection error:", err.message)
+      );
+      socket.on("error", (msg) => {
+        console.error("❌ Server error:", msg);
+        showNotification("خطأ", msg);
+      });
+
+      if (!email || !name) {
+        email = prompt("أدخل بريدك الإلكتروني:");
+        if (email && validateEmail(email)) {
+          name = prompt("أدخل اسمك:");
+          if (name) {
+            sessionStorage.setItem("email", email);
+            sessionStorage.setItem("name", name);
+            socket.emit("register", { email, name });
+          } else {
+            alert("يرجى إدخال اسم!");
+            window.location.reload();
+          }
+        } else {
+          alert("يرجى إدخال بريد إلكتروني صحيح!");
+          window.location.reload();
+        }
+      } else {
+        socket.emit("register", { email, name });
+      }
+
+      function validateEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      }
+
+      socket.on("updateUsers", ({ connections, pendingRequests: requests }) => {
+        userList.innerHTML = "";
+        connections.forEach(({ name, email: userEmail, online }) => {
+          const li = document.createElement("li");
+          li.classList.add("user");
+          if (online) li.classList.add("online");
+          li.dataset.email = userEmail;
+          li.innerHTML = `
+            <img src="https://via.placeholder.com/45" alt="صورة المستخدم" />
+            <div class="user-info">
+              <span class="username">${name}</span>
+              <span class="status ${online ? "online" : "offline"}">${
+            online ? "متصل" : "غير متصل"
+          }</span>
+            </div>
+          `;
+          li.addEventListener("click", () => selectChatPartner(userEmail));
+          userList.appendChild(li);
+        });
+
+        pendingRequests.innerHTML = "";
+        if (requests && requests.length > 0) {
+          const connectedEmails = connections.map((conn) => conn.email);
+          const filteredRequests = requests.filter(
+            (userEmail) => !connectedEmails.includes(userEmail)
+          );
+
+          filteredRequests.forEach((userEmail) => {
+            const li = document.createElement("li");
+            li.classList.add("request-container");
+            li.innerHTML = `
+              <div class="request" data-email="${userEmail}">
+                <div style="display: flex; align-items: center;">
+                  <img src="https://via.placeholder.com/45" alt="صورة المستخدم" />
+                  <div class="user-info">
+                    <span class="username">${userEmail}</span>
+                  </div>
+                </div>
+                <div class="request-buttons">
+                  <button class="accept" onclick="acceptConnection('${userEmail}', this)">قبول</button>
+                </div>
+                <div class="request-status"></div>
+              </div>
+              <button class="decline-btn" onclick="declineConnection('${userEmail}', this)">✖</button>
+            `;
+            pendingRequests.appendChild(li);
+            socket.emit("getUserName", { email: userEmail }, (response) => {
+              if (response.name) {
+                li.querySelector(".username").textContent = response.name;
+              }
+            });
+          });
+        }
+      });
+
+      socket.on("userName", (response) => {
+        const requestElement = document.querySelector(
+          `.request[data-email="${response.email}"]`
+        );
+        if (requestElement) {
+          requestElement.querySelector(".username").textContent = response.name;
+        }
+      });
+
+      function selectChatPartner(selectedEmail) {
+        chatPartner = selectedEmail;
+        const userLi = Array.from(userList.querySelectorAll(".user")).find(
+          (li) => li.dataset.email === selectedEmail
+        );
+        const chatPartnerName = userLi.querySelector(".username").textContent;
+        const isOnline = userLi.classList.contains("online");
+        document.querySelector(".chat-header .username").textContent =
+          chatPartnerName;
+        document.querySelector(".chat-header .status").textContent = isOnline
+          ? "متصل"
+          : "غير متصل";
+        document.querySelector(".chat-header .status").className = `status ${
+          isOnline ? "online" : "offline"
+        }`;
+        chatMessages.innerHTML = "";
+        socket.emit("loadMessages", { sender: email, receiver: chatPartner });
+        typingIndicator.style.display = "none";
+        toggleSidebar();
+      }
+
+      function deselectChatPartner() {
+        chatPartner = "";
+        document.querySelector(".chat-header .username").textContent = "";
+        document.querySelector(".chat-header .status").textContent = "";
+        chatMessages.innerHTML = "";
+      }
+
+      socket.on("previousMessages", (messages) => {
+        messages.forEach((msg) =>
+          displayMessage(msg, msg.sender === email ? "sent" : "received")
+        );
+      });
+
+      socket.on("receiveMessage", (data) => {
+        if (data.sender === chatPartner || data.receiver === chatPartner) {
+          displayMessage(data, data.sender === email ? "sent" : "received");
+          if (data.sender === chatPartner && !document.hasFocus()) {
+            showNotification(
+              `رسالة جديدة من ${data.senderName}`,
+              data.message
+            );
+          }
+        }
+      });
+
+      function displayMessage(data, type) {
+        const messageDiv = document.createElement("div");
+        messageDiv.classList.add("message", type);
+        if (data.replyTo) messageDiv.classList.add("reply");
+        messageDiv.setAttribute("data-id", data._id);
+        messageDiv.innerHTML = `
+          ${
+            type === "received"
+              ? '<img src="https://via.placeholder.com/40" alt="صورة المستخدم" />'
+              : ""
+          }
+          <div class="message-content">
+            ${
+              data.replyTo
+                ? `<div class="reply-preview">${
+                    data.replyMessage || "رسالة محذوفة"
+                  }</div>`
+                : ""
+            }
+            <span class="text">${data.message}</span>
+            <span class="time">${new Date(data.timestamp).toLocaleTimeString(
+              "ar"
+            )}
+              ${
+                type === "sent"
+                  ? `<span class="message-status">${
+                      data.status || "تم الإرسال"
+                    }</span>`
+                  : ""
+              }
+            </span>
+          </div>
+        `;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!chatPartner) {
+          showNotification("خطأ", "يرجى اختيار مستخدم للدردشة معه!");
+          return;
+        }
+        if (!message) {
+          showNotification("خطأ", "يرجى كتابة رسالة!");
+          return;
+        }
+        const data = {
+          sender: email,
+          receiver: chatPartner,
+          message,
+          replyTo: replyToMessageId,
+          status: "sent",
+        };
+        socket.emit("sendMessage", data);
+        messageInput.value = "";
+        replyToMessageId = null;
+        messageInput.placeholder = "اكتب رسالتك هنا...";
+      }
+
+      function acceptConnection(from, button) {
+        const requestElement = button.closest(".request");
+        requestElement.classList.add("accepted");
+        requestElement.querySelector(".request-status").textContent = "تم القبول";
+        button.classList.add("clicked");
+        setTimeout(() => {
+          socket.emit("acceptConnection", { from, to: email });
+          showNotification("تم القبول", `تم قبول طلب الاتصال من ${from}`);
+          requestElement.closest(".request-container").remove();
+        }, 500);
+      }
+
+      function declineConnection(from, button) {
+        const requestElement = button.closest(".request-container").querySelector(".request");
+        requestElement.classList.add("declined");
+        requestElement.querySelector(".request-status").textContent = "تم الرفض";
+        setTimeout(() => {
+          socket.emit("declineConnection", { from, to: email });
+          showNotification("تم الرفض", `تم رفض طلب الاتصال من ${from}`);
+          requestElement.closest(".request-container").remove();
+        }, 500);
+      }
+
+      let searchTimeout;
+      searchInput.addEventListener("input", (e) => {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim();
+        searchTimeout = setTimeout(() => {
+          if (query) {
+            socket.emit("searchUsers", { query, email });
+          } else {
+            searchResults.innerHTML = "";
+          }
+        }, 300);
+      });
+
+      socket.on("searchResults", (results) => {
+        searchResults.innerHTML = "";
+        if (!results || results.length === 0) {
+          searchResults.innerHTML =
+            "<div class='search-result'>لا توجد نتائج</div>";
+        } else {
+          results.forEach(({ name, email: userEmail, connected, pending }) => {
+            const div = document.createElement("div");
+            div.classList.add("search-result");
+            const isPending = pending || pendingRequestSent.has(userEmail);
+            div.innerHTML = `
+              <span>${name}</span>
+              ${
+                connected
+                  ? "<span>متصل بالفعل</span>"
+                  : isPending
+                  ? "<span>طلب معلق</span>"
+                  : `<button onclick="sendConnectionRequest('${userEmail}', this)">إرسال طلب</button>`
+              }
+            `;
+            searchResults.appendChild(div);
+          });
+        }
+      });
+
+      function sendConnectionRequest(to, button) {
+        if (pendingRequestSent.has(to)) {
+          showNotification("معلق", "لقد أرسلت طلبًا بالفعل!");
+          return;
+        }
+        socket.emit("sendConnectionRequest", { from: email, to });
+        pendingRequestSent.add(to);
+        button.disabled = true;
+        button.textContent = "تم الإرسال";
+        button.style.background = "#95a5a6";
+        showNotification("طلب مرسل", `تم إرسال طلب الاتصال إلى ${to}`);
+        setTimeout(() => {
+          searchResults.innerHTML = "";
+          searchInput.value = "";
+          button.disabled = false;
+          button.textContent = "إرسال طلب";
+          button.style.background = "";
+          pendingRequestSent.delete(to);
+        }, 5000);
+      }
+
+      function deleteSelectedMessage() {
+        if (!selectedMessageId) {
+          showNotification("خطأ", "يرجى تحديد رسالة لحذفها!");
+          return;
+        }
+        socket.emit("deleteMessage", {
+          messageId: selectedMessageId,
+          sender: email,
+          receiver: chatPartner,
+        });
+        const messageElement = document.querySelector(
+          `[data-id="${selectedMessageId}"]`
+        );
+        if (messageElement) {
+          messageElement.querySelector(".text").textContent =
+            "تم حذف هذه الرسالة";
+          messageElement.classList.add("deleted");
+        }
+        selectedMessageId = null;
+        actionMenu.style.display = "none";
+      }
+
+      function replyToMessage() {
+        if (!selectedMessageId) {
+          showNotification("خطأ", "يرجى تحديد رسالة للرد عليها!");
+          return;
+        }
+        const msgElement = document.querySelector(
+          `[data-id="${selectedMessageId}"] .text`
+        );
+        replyToMessageId = selectedMessageId;
+        messageInput.placeholder = `رد على: ${msgElement.textContent.substring(
+          0,
+          20
+        )}...`;
+        messageInput.focus();
+        actionMenu.style.display = "none";
+      }
+
+      function copyMessage() {
+        if (!selectedMessageId) {
+          showNotification("خطأ", "يرجى تحديد رسالة لنسخها!");
+          return;
+        }
+        const msgElement = document.querySelector(
+          `[data-id="${selectedMessageId}"] .text`
+        );
+        navigator.clipboard.writeText(msgElement.textContent);
+        showNotification("تم النسخ", "تم نسخ الرسالة إلى الحافظة");
+      }
+
+      function showNotification(title, message) {
+        notification.innerHTML = `<strong>${title}</strong><p>${message.substring(
+          0,
+          50
+        )}${message.length > 50 ? "..." : ""}</p>`;
+        notification.style.display = "block";
+        setTimeout(() => (notification.style.display = "none"), 3000);
+      }
+
+      socket.on("messageDeleted", ({ messageId }) => {
+        const messageElement = document.querySelector(
+          `[data-id="${messageId}"]`
+        );
+        if (messageElement) {
+          messageElement.querySelector(".text").textContent =
+            "تم حذف هذه الرسالة";
+          messageElement.classList.add("deleted");
+        }
+      });
+
+      socket.on("connectionDeclined", ({ from, to }) => {
+        if (to === email) {
+          showNotification(
+            "تم الرفض",
+            `قام ${from} برفض طلب الاتصال الخاص بك`
+          );
+        }
+      });
+
+      userList.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        const userLi = e.target.closest(".user");
+        if (userLi) {
+          const userEmail = userLi.dataset.email;
+          actionMenu.innerHTML = `
+            <button onclick="removeFriend('${userEmail}')">إزالة صديق</button>
+          `;
+          actionMenu.style.display = "block";
+          actionMenu.style.top = `${e.pageY}px`;
+          actionMenu.style.left = `${e.pageX}px`;
+        }
+      });
+
+      function removeFriend(userEmail) {
+        socket.emit("removeFriend", { from: email, to: userEmail });
+        actionMenu.style.display = "none";
+      }
+
+      socket.on("friendRemoved", ({ from, to }) => {
+        if (from === email || to === email) {
+          deselectChatPartner();
+        }
+      });
+
+      messageInput.addEventListener("input", () => {
+        if (chatPartner) {
+          socket.emit("typing", { sender: email, receiver: chatPartner });
+          clearTimeout(typingTimeout);
+          typingTimeout = setTimeout(() => {
+            socket.emit("stopTyping", { sender: email, receiver: chatPartner });
+          }, 1000);
+        }
+      });
+
+      socket.on("typing", ({ sender }) => {
+        if (sender === chatPartner) typingIndicator.style.display = "block";
+      });
+
+      socket.on("stopTyping", ({ sender }) => {
+        if (sender === chatPartner) typingIndicator.style.display = "none";
+      });
+
+      sendButton.addEventListener("click", sendMessage);
+      messageInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") sendMessage();
+      });
+
+      chatMessages.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        const messageDiv = e.target.closest(".message");
+        if (messageDiv) {
+          selectedMessageId = messageDiv.getAttribute("data-id");
+          actionMenu.innerHTML = `
+            <button onclick="deleteSelectedMessage()">حذف</button>
+            <button onclick="replyToMessage()">رد</button>
+            <button onclick="copyMessage()">نسخ</button>
+          `;
+          actionMenu.style.display = "block";
+          actionMenu.style.top = `${e.pageY}px`;
+          actionMenu.style.left = `${e.pageX}px`;
+        }
+      });
+
+      document.addEventListener("click", () => {
+        actionMenu.style.display = "none";
+      });
+
+      function toggleSidebar() {
+        document.querySelector(".sidebar").classList.toggle("active");
+      }
+    </script>
+  </body>
+</html>
